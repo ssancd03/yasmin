@@ -1,3 +1,4 @@
+#include "yasmin/blackboard/blackboard_wrapper.hpp"
 #include <pluginlib/class_loader.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -6,31 +7,6 @@
 
 namespace py = pybind11;
 
-// Helper function to convert Python dict to C++ Blackboard
-std::shared_ptr<yasmin::blackboard::Blackboard>
-dict_to_blackboard(const py::dict &py_dict) {
-  auto bb = std::make_shared<yasmin::blackboard::Blackboard>();
-
-  for (auto item : py_dict) {
-    std::string key = py::str(item.first);
-    py::handle value = item.second;
-
-    // For now, we'll support basic types. This can be extended as needed.
-    if (py::isinstance<py::str>(value)) {
-      bb->set<std::string>(key, py::cast<std::string>(value));
-    } else if (py::isinstance<py::int_>(value)) {
-      bb->set<int>(key, py::cast<int>(value));
-    } else if (py::isinstance<py::float_>(value)) {
-      bb->set<double>(key, py::cast<double>(value));
-    } else if (py::isinstance<py::bool_>(value)) {
-      bb->set<bool>(key, py::cast<bool>(value));
-    }
-    // Add more type conversions as needed
-  }
-
-  return bb;
-}
-
 class CppStateWrapper {
 public:
   explicit CppStateWrapper(std::shared_ptr<yasmin::State> impl) : impl_(impl) {}
@@ -38,9 +14,8 @@ public:
   std::string operator()(std::shared_ptr<yasmin::blackboard::Blackboard> bb) {
     return (*impl_)(bb);
   }
-  std::string call_with_dict(const py::dict &py_dict) {
-    auto bb = dict_to_blackboard(py_dict);
-    return (*impl_)(bb);
+  std::string operator()(BlackboardWrapper &bb_wrapper) {
+    return (*impl_)(bb_wrapper.native());
   }
   std::string to_string() const { return impl_->to_string(); }
 
@@ -65,8 +40,11 @@ private:
 
 PYBIND11_MODULE(pybind_bridge, m) {
   py::class_<CppStateWrapper>(m, "CppState")
-      .def("__call__", &CppStateWrapper::operator())
-      .def("call_with_dict", &CppStateWrapper::call_with_dict)
+      .def("__call__",
+           py::overload_cast<BlackboardWrapper &>(&CppStateWrapper::operator()))
+      .def("__call__",
+           py::overload_cast<std::shared_ptr<yasmin::blackboard::Blackboard>>(
+               &CppStateWrapper::operator()))
       .def("get_outcomes", &CppStateWrapper::get_outcomes)
       .def("__str__", &CppStateWrapper::to_string);
 

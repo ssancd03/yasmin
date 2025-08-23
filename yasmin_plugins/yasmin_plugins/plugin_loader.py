@@ -1,16 +1,17 @@
 import importlib
-from yasmin import State, blackboard
-from typing import Iterable, List, Dict, TYPE_CHECKING
+import xml.etree.ElementTree as ET
+from yasmin import State, Blackboard, StateMachine
+from typing import TYPE_CHECKING
 
 try:
-    from .pybind_bridge import CppStateFactory, CppState
+    from .pybind_bridge import CppStateFactory
 
     PYBIND_AVAILABLE = True
 except ImportError:
     # Fallback if the pybind_bridge module is not built/installed
     PYBIND_AVAILABLE = False
     if TYPE_CHECKING:
-        from .pybind_bridge import CppStateFactory, CppState
+        from .pybind_bridge import CppStateFactory
 
 
 class _CppStateAdapter(State):
@@ -18,18 +19,11 @@ class _CppStateAdapter(State):
         super().__init__(cpp_state.get_outcomes())
         self._cpp_state = cpp_state
 
-    def execute(self, blackboard: blackboard.Blackboard) -> str:
-        # Convert Python blackboard to dict and use the new C++ method
-        blackboard_dict = blackboard._data if hasattr(blackboard, "_data") else {}
-        return self._cpp_state.call_with_dict(blackboard_dict)
+    def execute(self, blackboard: Blackboard) -> str:
+        return self._cpp_state(blackboard)
 
 
 class YasminPluginLoader:
-    """
-    Plugin spec format:
-      - C++: {"type": "cpp", "class": "example_cpp_state_class_name"}
-      - Py : {"type": "py",  "module": "example_py_module", "class": "ExamplePyState"}
-    """
 
     def __init__(self):
         if PYBIND_AVAILABLE:
@@ -37,20 +31,63 @@ class YasminPluginLoader:
         else:
             self._cpp_factory = None
 
-    def load_plugins(self, specs: Iterable[Dict]) -> List[State]:
-        states = []
-        for spec in specs:
-            if spec["type"] == "cpp":
-                if not PYBIND_AVAILABLE:
-                    raise RuntimeError(
-                        "C++ plugins are not available. The pybind_bridge module is not installed."
-                    )
-                cpp_state = self._cpp_factory.create(spec["class"])
-                states.append(_CppStateAdapter(cpp_state))
-            elif spec["type"] == "py":
-                mod = importlib.import_module(spec["module"])
-                cls = getattr(mod, spec["class"])
-                states.append(cls())
+    def load_state(self, state_elem: ET.Element) -> State:
+        state_type = state_elem.attrib.get("type", "py")
+        class_name = state_elem.attrib["class"]
+
+        if state_type == "py":
+            module_name = state_elem.attrib["module"]
+            module = importlib.import_module(module_name)
+            state_class = getattr(module, class_name)
+
+            # Handle parameters if any
+            params = state_elem.attrib.get("parameters", "")
+            if params:
+                param_list = [param.strip() for param in params.split(",")]
+                return state_class(*param_list)
             else:
-                raise ValueError(f"Unknown plugin type: {spec['type']}")
-        return states
+                return state_class()
+
+        elif state_type == "cpp":
+            if not PYBIND_AVAILABLE:
+                raise RuntimeError(
+                    "C++ states are not supported as pybind is unavailable."
+                )
+            return _CppStateAdapter(self._cpp_factory.create(class_name))
+
+        else:
+            raise ValueError(f"Unknown state type: {state_type}")
+
+    def load_sm(self, xml_file: str) -> StateMachine:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        if root.tag != "StateMachine":
+            raise ValueError("Root element must be 'StateMachine'")
+
+        return self.build_sm(root)
+
+    def build_sm(self, root: ET.Element) -> StateMachine:
+
+        sm = StateMachine(outcomes=root.attrib.get("outcomes", "").split(" "))
+
+        for child in root:
+
+            transitions = {}
+            for cchild in child:
+                if cchild.tag == "Transition":
+                    transitions[cchild.attrib["from"]] = cchild.attrib["to"]
+
+            if child.tag == "State":
+                state = self.load_state(child)
+
+            elif child.tag == "StateMachine":
+                state = self.build_sm(child)
+
+            sm.add_state(
+                child.attrib["name"],
+                state,
+                transitions=transitions,
+            )
+
+        return sm
