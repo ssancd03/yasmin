@@ -10,9 +10,11 @@
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   <depend>rclpy</depend>
   <depend>rclcpp</depend>
+  <depend>pluginlib</depend>
   <depend>yasmin</depend>
   <depend>yasmin_ros</depend>
   <depend>yasmin_viewer</depend>
+  <depend>yasmin_plugins</depend>
   <depend>nav_msgs</depend>
   <depend>example_interfaces</depend>
   <test_depend>ament_copyright</test_depend>
@@ -22,5 +24,6 @@
   <build_depend>ros_environment</build_depend>
   <export>
     <build_type>ament_cmake</build_type>
+    <pluginlib plugin_manifest="resource/plugins.xml"/>
   </export>
 </package>
