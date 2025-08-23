@@ -12,6 +12,7 @@
     <depend>rclcpp</depend>
     <depend>yasmin</depend>
     <exec_depend>python3</exec_depend>
+    <depend>pybind11-dev</depend>
     <export>
         <build_type>ament_cmake</build_type>
     </export>
