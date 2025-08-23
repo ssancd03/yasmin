@@ -9,6 +9,9 @@ endif()
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Development Interpreter)
+find_package(pybind11 REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 # C++
 include_directories(src)
@@ -40,24 +43,43 @@ install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
 )
 
+# Python bindings
+pybind11_add_module(yasmin_blackboard
+    src/yasmin/blackboard/blackboard_bindings.cpp
+)
+target_link_libraries(yasmin_blackboard PRIVATE
+    pybind11::module
+    ${PROJECT_NAME}
+    nlohmann_json::nlohmann_json
+)
+
+install(TARGETS yasmin_blackboard
+    LIBRARY DESTINATION lib/${PROJECT_NAME}
+)
+ament_environment_hooks(PYTHONPATH.sh.in)
+
 ament_export_include_directories("include/${PROJECT_NAME}")
 ament_export_libraries(${PROJECT_NAME})
 ament_export_targets(${PROJECT_NAME})
-ament_export_dependencies(${DEPENDENCIES_PACKAGE})
+ament_export_dependencies(nlohmann_json)
 
-
-# Python
+# Python package
 ament_python_install_package(${PROJECT_NAME})
 
 # Tests
-install(
-  DIRECTORY tests/python/
-  DESTINATION pytests/${PROJECT_NAME}
-)
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+  
+  install(
+    DIRECTORY tests/python/
+    DESTINATION share/${PROJECT_NAME}/test
+  )
 
-install(
-  PROGRAMS tests/run_pytests.sh
-  DESTINATION lib/${PROJECT_NAME}
-)
+  install(
+    PROGRAMS tests/run_pytests.sh
+    DESTINATION lib/${PROJECT_NAME}
+  )
+endif()
 
 ament_package()
