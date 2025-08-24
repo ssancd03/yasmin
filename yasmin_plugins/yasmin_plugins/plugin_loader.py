@@ -15,7 +15,7 @@
 
 import importlib
 import xml.etree.ElementTree as ET
-from yasmin import State, Blackboard, StateMachine
+from yasmin import State, Blackboard, StateMachine, Concurrence
 from yasmin_plugins.pybind_bridge import CppStateFactory, CppState
 
 
@@ -70,7 +70,7 @@ class YasminPluginLoader:
         self._cpp_factory = CppStateFactory()
         self._cpp_state_adapters = []  # Track created C++ state adapters
 
-    def load_state(self, state_elem: ET.Element) -> State:
+    def build_state(self, state_elem: ET.Element) -> State:
         """
         Loads a state from an XML element.
         Args:
@@ -106,24 +106,48 @@ class YasminPluginLoader:
         else:
             raise ValueError(f"Unknown state type: {state_type}")
 
-    def load_sm(self, xml_file: str) -> StateMachine:
+    def build_concurrence(self, conc_elem: ET.Element) -> Concurrence:
         """
-        Loads a state machine from an XML file.
+        Loads a concurrence from an XML element.
         Args:
-            xml_file (str): Path to the XML file defining the state machine.
+            conc_elem (ET.Element): The XML element defining the concurrence.
         Returns:
-            StateMachine: An instance of the loaded state machine.
+            Concurrence: An instance of the loaded concurrence.
         Raises:
-            ValueError: If the XML structure is invalid.
+            ValueError: If required attributes are missing.
         """
 
-        tree = ET.parse(xml_file)
-        root = tree.getroot()
+        default_outcome = conc_elem.attrib.get("default_outcome", "")
 
-        if root.tag != "StateMachine":
-            raise ValueError("Root element must be 'StateMachine'")
+        states = {}
+        outcome_map = {}
 
-        return self.build_sm(root)
+        for child in conc_elem:
+            for cchild in child:
+                if cchild.tag == "Outcome":
+                    outcome_map[cchild.attrib["to"]] = {}
+                    for ccchild in cchild:
+                        if ccchild.tag == "Transition":
+                            outcome_map[cchild.attrib["to"]][
+                                states[ccchild.attrib["state"]]
+                            ] = ccchild.attrib["outcome"]
+
+            if child.tag == "State":
+                states[child.attrib["name"]] = self.build_state(child)
+
+            elif child.tag == "Concurrence":
+                states[child.attrib["name"]] = self.build_concurrence(child)
+
+            elif child.tag == "StateMachine":
+                states[child.attrib["name"]] = self.build_sm(child)
+
+        concurrence = Concurrence(
+            states=list(states.values()),
+            outcome_map=outcome_map,
+            default_outcome=default_outcome,
+        )
+
+        return concurrence
 
     def build_sm(self, root: ET.Element) -> StateMachine:
         """
@@ -146,7 +170,10 @@ class YasminPluginLoader:
                     transitions[cchild.attrib["from"]] = cchild.attrib["to"]
 
             if child.tag == "State":
-                state = self.load_state(child)
+                state = self.build_state(child)
+
+            elif child.tag == "Concurrence":
+                state = self.build_concurrence(child)
 
             elif child.tag == "StateMachine":
                 state = self.build_sm(child)
@@ -158,6 +185,25 @@ class YasminPluginLoader:
             )
 
         return sm
+
+    def load_sm(self, xml_file: str) -> StateMachine:
+        """
+        Loads a state machine from an XML file.
+        Args:
+            xml_file (str): Path to the XML file defining the state machine.
+        Returns:
+            StateMachine: An instance of the loaded state machine.
+        Raises:
+            ValueError: If the XML structure is invalid.
+        """
+
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        if root.tag != "StateMachine":
+            raise ValueError("Root element must be 'StateMachine'")
+
+        return self.build_sm(root)
 
     def cleanup(self) -> None:
         """
