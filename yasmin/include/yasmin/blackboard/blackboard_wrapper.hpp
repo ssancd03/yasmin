@@ -1,5 +1,20 @@
-// blackboard_wrapper.hpp
-#pragma once
+// Copyright (C) 2025 Miguel Ángel González Santamarta
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#ifndef YASMIN__BLACKBOARD__BLACKBOARD_WRAPPER_HPP
+#define YASMIN__BLACKBOARD__BLACKBOARD_WRAPPER_HPP
 
 #include "yasmin/blackboard/blackboard.hpp"
 #include <nlohmann/json.hpp>
@@ -8,14 +23,23 @@
 
 namespace py = pybind11;
 using json = nlohmann::json;
-using namespace yasmin::blackboard;
 
+namespace yasmin {
+namespace blackboard {
+
+/**
+ * @class BlackboardWrapper
+ * @brief A Python wrapper for the C++ Blackboard class, providing a
+ * dictionary-like interface.
+ */
 class BlackboardWrapper {
 public:
-  // Constructor with optional initial data
+  /**
+   * @brief Constructor for BlackboardWrapper.
+   * @param initial_data Optional initial data to populate the blackboard.
+   */
   BlackboardWrapper(py::dict initial_data = py::dict())
       : bb(std::make_shared<Blackboard>()) {
-    // Initialize with data if provided
     for (auto item : initial_data) {
       std::string key = py::str(item.first).cast<std::string>();
       py::object value = item.second.cast<py::object>();
@@ -23,7 +47,11 @@ public:
     }
   }
 
-  // __setitem__ for dictionary-like assignment: bb["key"] = value
+  /**
+   * @brief Set a value in the blackboard.
+   * @param key The key to associate with the value.
+   * @param value The value to store.
+   */
   void set_item(const std::string &key, py::object value) {
     // Check for primitive types first to avoid JSON serialization
     if (py::isinstance<py::int_>(value)) {
@@ -65,7 +93,13 @@ public:
     }
   }
 
-  // __getitem__ for dictionary-like access: value = bb["key"]
+  /**
+   * @brief Get a value from the blackboard.
+   * @param key The key associated with the value.
+   * @return The value associated with the specified key.
+   * @throws py::key_error if the key does not exist.
+   * @throws py::value_error if the value cannot be converted to a Python type.
+   */
   py::object get_item(const std::string &key) {
     if (!bb->contains(key)) {
       throw py::key_error("Key '" + key + "' not found in blackboard");
@@ -148,7 +182,11 @@ public:
     }
   }
 
-  // __delitem__ for dictionary-like deletion: del bb["key"]
+  /**
+   * @brief Delete a value from the blackboard.
+   * @param key The key associated with the value to delete.
+   * @throws py::key_error if the key does not exist.
+   */
   void del_item(const std::string &key) {
     if (!this->bb->contains(key)) {
       throw py::key_error("Key '" + key + "' not found in blackboard");
@@ -157,13 +195,23 @@ public:
     this->type_registry.erase(key);
   }
 
-  // contains for __contains__: "key" in bb
+  /**
+   * @brief Check if a key exists in the blackboard.
+   * @param key The key to check.
+   * @return True if the key exists, false otherwise.
+   */
   bool contains(const std::string &key) { return this->bb->contains(key); }
 
-  // size for __len__: len(bb)
+  /**
+   * @brief Get the number of key-value pairs in the blackboard.
+   * @return The size of the blackboard.
+   */
   int size() { return this->bb->size(); }
 
-  // remappings property
+  /**
+   * @brief Get the remapping of the blackboard.
+   * @return The remapping as a Python dictionary.
+   */
   py::dict get_remapping() {
     py::dict result;
     auto remapping = this->bb->get_remapping();
@@ -173,6 +221,10 @@ public:
     return result;
   }
 
+  /**
+   * @brief Set the remapping of the blackboard.
+   * @param remapping The remapping to set as a Python dictionary.
+   */
   void set_remapping(const py::dict &remapping) {
     std::map<std::string, std::string> cpp_map;
     for (auto item : remapping) {
@@ -183,13 +235,25 @@ public:
     this->bb->set_remapping(cpp_map);
   }
 
-  // to_string for __str__ and __repr__
+  /**
+   * @brief Convert the blackboard to a string representation.
+   * @return The string representation of the blackboard.
+   */
   std::string to_string() { return this->bb->to_string(); }
 
-  // Get native blackboard for C++ interop
+  /**
+   * @brief Get the underlying native Blackboard instance.
+   * @return A shared pointer to the native Blackboard instance.
+   */
   std::shared_ptr<Blackboard> native() { return this->bb; }
 
-  // Get type information for a key
+  /**
+   * @brief Get the type of the value associated with a key.
+   * @param key The key to check.
+   * @return The type as a string (e.g., "int", "float", "string", "list",
+   * "dict", "None", etc.).
+   * @throws py::key_error if the key does not exist.
+   */
   std::string get_type(const std::string &key) {
     if (!this->bb->contains(key)) {
       throw py::key_error("Key '" + key + "' not found");
@@ -293,11 +357,16 @@ public:
   }
 
 private:
+  /// The underlying native Blackboard instance
   std::shared_ptr<Blackboard> bb;
-  // Track the actual types of stored values to avoid ambiguity
+  /// Track the actual types of stored values to avoid ambiguity
   std::map<std::string, std::string> type_registry;
 
-  // Convert Python object to JSON (for complex types only)
+  /**
+   * @brief Convert a Python object to JSON.
+   * @param obj The Python object to convert.
+   * @return The corresponding JSON representation.
+   */
   json convert_py_to_json(py::object obj) {
     if (py::isinstance<py::list>(obj) || py::isinstance<py::tuple>(obj)) {
       json j_array = json::array();
@@ -331,7 +400,11 @@ private:
     }
   }
 
-  // Convert JSON to Python object
+  /**
+   * @brief Convert JSON to a Python object.
+   * @param j The JSON object to convert.
+   * @return The corresponding Python object.
+   */
   py::object convert_json_to_py(const json &j) {
     switch (j.type()) {
     case json::value_t::number_integer:
@@ -364,3 +437,8 @@ private:
     }
   }
 };
+
+} // namespace blackboard
+} // namespace yasmin
+
+#endif // YASMIN__BLACKBOARD__BLACKBOARD_WRAPPER_HPP

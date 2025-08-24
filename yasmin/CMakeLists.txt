@@ -52,7 +52,6 @@ target_link_libraries(yasmin_blackboard PRIVATE
     ${PROJECT_NAME}
     nlohmann_json::nlohmann_json
 )
-
 install(TARGETS yasmin_blackboard
     LIBRARY DESTINATION lib/${PROJECT_NAME}
 )

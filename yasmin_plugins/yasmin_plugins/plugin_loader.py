@@ -1,37 +1,87 @@
+# Copyright (C) 2025 Miguel Ángel González Santamarta
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import importlib
 import xml.etree.ElementTree as ET
 from yasmin import State, Blackboard, StateMachine
-from typing import TYPE_CHECKING
-
-try:
-    from .pybind_bridge import CppStateFactory
-
-    PYBIND_AVAILABLE = True
-except ImportError:
-    # Fallback if the pybind_bridge module is not built/installed
-    PYBIND_AVAILABLE = False
-    if TYPE_CHECKING:
-        from .pybind_bridge import CppStateFactory
+from yasmin_plugins.pybind_bridge import CppStateFactory, CppState
 
 
 class _CppStateAdapter(State):
-    def __init__(self, cpp_state):
+    """
+    Adapter class to convert a C++ State instance into a Python State.
+    """
+
+    def __init__(self, cpp_state: CppState) -> None:
+        """
+        Initializes the adapter with a C++ State instance.
+        """
+
         super().__init__(cpp_state.get_outcomes())
         self._cpp_state = cpp_state
 
     def execute(self, blackboard: Blackboard) -> str:
+        """
+        Executes the C++ State instance with the provided blackboard.
+        Args:
+            blackboard (Blackboard): The blackboard to pass to the C++ state.
+        Returns:
+            str: The outcome returned by the C++ state.
+        """
         return self._cpp_state(blackboard)
+
+    def cleanup(self) -> None:
+        """
+        Explicitly cleanup the C++ state reference.
+        """
+        self._cpp_state = None
+
+    def __del__(self) -> None:
+        """
+        Destructor that ensures proper cleanup of C++ state reference.
+        """
+        try:
+            self.cleanup()
+        except:
+            # Ignore errors during cleanup in destructor
+            pass
 
 
 class YasminPluginLoader:
 
-    def __init__(self):
-        if PYBIND_AVAILABLE:
-            self._cpp_factory = CppStateFactory()
-        else:
-            self._cpp_factory = None
+    def __init__(self) -> None:
+        """
+        Initializes the plugin loader, setting up the C++ state factory if
+        pybind is available.
+        """
+
+        self._cpp_factory = CppStateFactory()
+        self._cpp_state_adapters = []  # Track created C++ state adapters
 
     def load_state(self, state_elem: ET.Element) -> State:
+        """
+        Loads a state from an XML element.
+        Args:
+            state_elem (ET.Element): The XML element defining the state.
+        Returns:
+            State: An instance of the loaded state.
+        Raises:
+            ValueError: If the state type is unknown or if required attributes
+                        are missing.
+        """
+
         state_type = state_elem.attrib.get("type", "py")
         class_name = state_elem.attrib["class"]
 
@@ -49,16 +99,24 @@ class YasminPluginLoader:
                 return state_class()
 
         elif state_type == "cpp":
-            if not PYBIND_AVAILABLE:
-                raise RuntimeError(
-                    "C++ states are not supported as pybind is unavailable."
-                )
-            return _CppStateAdapter(self._cpp_factory.create(class_name))
+            adapter = _CppStateAdapter(self._cpp_factory.create(class_name))
+            self._cpp_state_adapters.append(adapter)  # Track the adapter
+            return adapter
 
         else:
             raise ValueError(f"Unknown state type: {state_type}")
 
     def load_sm(self, xml_file: str) -> StateMachine:
+        """
+        Loads a state machine from an XML file.
+        Args:
+            xml_file (str): Path to the XML file defining the state machine.
+        Returns:
+            StateMachine: An instance of the loaded state machine.
+        Raises:
+            ValueError: If the XML structure is invalid.
+        """
+
         tree = ET.parse(xml_file)
         root = tree.getroot()
 
@@ -68,6 +126,15 @@ class YasminPluginLoader:
         return self.build_sm(root)
 
     def build_sm(self, root: ET.Element) -> StateMachine:
+        """
+        Recursively builds a state machine from an XML element.
+        Args:
+            root (ET.Element): The XML element defining the state machine.
+        Returns:
+            StateMachine: An instance of the built state machine.
+        Raises:
+            ValueError: If the XML structure is invalid.
+        """
 
         sm = StateMachine(outcomes=root.attrib.get("outcomes", "").split(" "))
 
@@ -91,3 +158,29 @@ class YasminPluginLoader:
             )
 
         return sm
+
+    def cleanup(self) -> None:
+        """
+        Explicitly cleanup all created C++ state adapters and the factory.
+        This should be called before the plugin loader is destroyed to avoid
+        class loader warnings.
+        """
+        # Cleanup all tracked C++ state adapters
+        for adapter in self._cpp_state_adapters:
+            adapter.cleanup()
+
+        # Clear references to C++ state adapters
+        self._cpp_state_adapters.clear()
+
+        # Explicitly delete the C++ factory to trigger proper cleanup
+        self._cpp_factory = None
+
+    def __del__(self) -> None:
+        """
+        Destructor that ensures proper cleanup of C++ objects.
+        """
+        try:
+            self.cleanup()
+        except:
+            # Ignore errors during cleanup in destructor
+            pass
