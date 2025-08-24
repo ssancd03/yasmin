@@ -205,5 +205,14 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  yasmin_demos/plugin_demo.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install state_machines directory
+install(DIRECTORY state_machines
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 ament_package()
