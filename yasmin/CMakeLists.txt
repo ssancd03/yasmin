@@ -44,15 +44,15 @@ install(DIRECTORY include/
 )
 
 # Python bindings
-pybind11_add_module(yasmin_blackboard
-    src/yasmin/blackboard/blackboard_bindings.cpp
+pybind11_add_module(yasmin_py
+    src/yasmin/pybindings.cpp
 )
-target_link_libraries(yasmin_blackboard PRIVATE
+target_link_libraries(yasmin_py PRIVATE
     pybind11::module
     ${PROJECT_NAME}
     nlohmann_json::nlohmann_json
 )
-install(TARGETS yasmin_blackboard
+install(TARGETS yasmin_py
     LIBRARY DESTINATION lib/${PROJECT_NAME}
 )
 ament_environment_hooks(PYTHONPATH.sh.in)

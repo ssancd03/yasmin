@@ -110,7 +110,7 @@ class StateMachine(State):
             raise KeyError(f"State '{name}' already registered in the state machine")
 
         # Check if state name is an outcome of the state machine
-        if name in self._outcomes:
+        if name in self.get_outcomes():
             raise KeyError(f"State name '{name}' is already registered as an outcome")
 
         # Check the transitions

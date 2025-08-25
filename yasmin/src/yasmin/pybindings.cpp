@@ -14,12 +14,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "yasmin/blackboard/blackboard_wrapper.hpp"
+#include "yasmin/state_wrapper.hpp"
 #include <pybind11/pybind11.h>
 
 namespace py = pybind11;
+using namespace yasmin;
 using namespace yasmin::blackboard;
 
-PYBIND11_MODULE(yasmin_blackboard, m) {
+PYBIND11_MODULE(yasmin_py, m) {
   py::class_<BlackboardWrapper>(m, "Blackboard")
       // __init__ with optional initial data
       .def(py::init<py::dict>(), py::arg("initial_data") = py::dict())
@@ -70,4 +72,28 @@ PYBIND11_MODULE(yasmin_blackboard, m) {
       .def_property_readonly(
           "native", &BlackboardWrapper::native,
           "Get the native C++ blackboard object (for advanced use)");
+
+  py::class_<StateWrapper>(m, "State")
+      // __init__ with optional initial data
+      .def(py::init<py::set>(), py::arg("outcomes") = py::set())
+      .def(py::init<py::list>(), py::arg("outcomes") = py::list())
+
+      // Call operators
+      .def("__call__", py::overload_cast<>(&StateWrapper::operator()))
+      .def("__call__",
+           py::overload_cast<yasmin::blackboard::BlackboardWrapper &>(
+               &StateWrapper::operator()))
+      .def("__call__",
+           py::overload_cast<std::shared_ptr<yasmin::blackboard::Blackboard>>(
+               &StateWrapper::operator()))
+
+      // get outcomes
+      .def("get_outcomes", &StateWrapper::get_outcomes)
+
+      // string representation
+      .def("__str__", &StateWrapper::to_string)
+
+      .def_property_readonly(
+          "native", &StateWrapper::native,
+          "Get the native C++ state object (for advanced use)");
 }
