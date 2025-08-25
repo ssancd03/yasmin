@@ -16,7 +16,7 @@
 import importlib
 import xml.etree.ElementTree as ET
 from yasmin import State, Blackboard, StateMachine, Concurrence
-from yasmin_plugins.pybind_bridge import CppStateFactory, CppState
+from yasmin_pybind_bridge import CppStateFactory, CppState
 
 
 class _CppStateAdapter(State):

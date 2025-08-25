@@ -12,14 +12,14 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 set(CMAKE_CXX_STANDARD 17)
 
 # Build pybind11 bridge
-pybind11_add_module(pybind_bridge 
+pybind11_add_module(yasmin_pybind_bridge 
   src/pybind_bridge/pybind_bridge.cpp
 )
-target_link_libraries(pybind_bridge PUBLIC
+target_link_libraries(yasmin_pybind_bridge PUBLIC
   pluginlib::pluginlib
   yasmin::yasmin
 )
-install(TARGETS pybind_bridge
+install(TARGETS yasmin_pybind_bridge
     LIBRARY DESTINATION lib/${PROJECT_NAME}
 )
 ament_environment_hooks(PYTHONPATH.sh.in)

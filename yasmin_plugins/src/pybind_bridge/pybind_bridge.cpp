@@ -116,7 +116,7 @@ private:
   pluginlib::ClassLoader<yasmin::State> loader_;
 };
 
-PYBIND11_MODULE(pybind_bridge, m) {
+PYBIND11_MODULE(yasmin_pybind_bridge, m) {
   py::class_<CppStateWrapper>(m, "CppState")
       .def("__call__",
            py::overload_cast<yasmin::blackboard::BlackboardWrapper &>(
